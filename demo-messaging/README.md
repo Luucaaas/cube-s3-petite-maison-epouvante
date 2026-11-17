@@ -201,6 +201,27 @@ position du service normal. Avec RabbitMQ, c'est impossible : un message acquitt
 
 Le tableau des forces et faiblesses des deux bus est dans [comparatif.md](comparatif.md).
 
+## Test comparatif (débit et latence)
+
+`benchmark.py` envoie la **même rafale** d'événements `article.propose` à RabbitMQ puis à Kafka, avec un
+consommateur démarré avant l'envoi, et mesure le débit et la latence de chaque message. Les messages de test ont
+la catégorie `bench` et passent par une file et un topic dédiés, supprimés à la fin : ils ne gênent pas les
+scénarios de démo.
+
+Les deux conteneurs doivent tourner. Depuis `demo-messaging/` (environ 1 minute) :
+
+```bash
+python -m benchmark
+```
+
+Par défaut : 500 messages d'échauffement non comptés, puis 3 essais de 10 000 messages par bus. Le script écrit
+[resultats.md](resultats.md) (conditions de mesure, tableau, détail des essais) et conserve la partie « Lecture »
+déjà rédigée. Essai rapide sans écrire de fichier :
+
+```bash
+python -m benchmark --messages 2000 --runs 1 --resultats ""
+```
+
 ## Arrêter
 
 ```bash
