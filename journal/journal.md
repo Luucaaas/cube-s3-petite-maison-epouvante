@@ -4,3 +4,4 @@ Une ligne par issue terminée ou par difficulté : `AAAA-MM-JJ · Prénom · #is
 
 
 2026-11-17 · Lucas · #1 · Micro-service FastAPI troc (4 routes, données en mémoire), 6 tests pytest, Dockerfile non root, chart Helm minimal `troc` ; vérifié en local (docker build, kind + helm, /health OK) / RAS : avertissement de dépréciation httpx dans Starlette, sans effet sur les tests
+2026-11-17 · Marie · #16 · `demo-messaging/docker-compose.yml` (RabbitMQ 3.13 + interface d'admin, Kafka 3.8 en mode KRaft sans ZooKeeper) et README de lancement ; vérifié en local (deux services healthy, admin web OK, topic `troc.articles` créé, message envoyé et relu) / sous Git Bash, les chemins `/opt/kafka/...` sont réécrits : `MSYS_NO_PATHCONV=1` (noté dans le README)
