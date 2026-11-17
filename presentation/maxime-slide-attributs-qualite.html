@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Attributs qualité</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F6F7F9; --ink: #1B1B1F; --muted: #4A4F5C; --line: #E3E6EB;
+    --head: #1B1B1F; --blue: #1F5FC7; --orange: #B4530F; --band: #EDF0F5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 900px; background: var(--bg); }
+  body { font-family: Inter, "Helvetica Neue", Arial, sans-serif; color: var(--ink); padding: 48px 64px; }
+  h1 { font-size: 44px; font-weight: 800; letter-spacing: -0.5px; }
+  .sub { margin-top: 8px; font-size: 20px; color: var(--muted); }
+  table { margin-top: 26px; width: 100%; border-collapse: separate; border-spacing: 0;
+          background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th { background: var(--head); color: #fff; text-align: left; font-size: 14px; font-weight: 700;
+       letter-spacing: 1.2px; text-transform: uppercase; padding: 13px 20px; }
+  td { padding: 15px 20px; font-size: 18px; line-height: 1.4; border-top: 1px solid var(--line); vertical-align: middle; }
+  tr:first-child td { border-top: none; }
+  td.attr { font-weight: 700; font-size: 20px; white-space: nowrap; }
+  td.attr .n { color: var(--blue); margin-right: 4px; }
+  td.attr small { display: block; font-weight: 400; font-size: 14px; color: var(--muted); margin-top: 2px; }
+  td.kpi { font-weight: 600; }
+  .demo { display: inline-block; font-size: 12.5px; font-weight: 700; color: var(--orange);
+          border: 1.5px solid var(--orange); border-radius: 4px; padding: 0 5px; margin-left: 4px; vertical-align: 1px; }
+  .foot { margin-top: 20px; font-size: 16.5px; color: var(--muted); }
+  .foot b { color: var(--ink); }
+  .foot .demo { margin-left: 0; margin-right: 4px; }
+  /* 3200x1800 export (headless Firefox, window 3200 px wide) */
+  @media (min-width: 3000px) { html { zoom: 2; } }
+</style>
+</head>
+<body>
+  <h1>Attributs qualité&nbsp;: 6 priorités pour la plateforme</h1>
+  <p class="sub">ISO/IEC 25010:2023 — choisis selon les contraintes du sujet&nbsp;: festival, 4 magasins dont Londres, données clients, SI existant</p>
+
+  <table>
+    <colgroup><col style="width:19%"><col style="width:29%"><col style="width:33%"><col style="width:19%"></colgroup>
+    <tr><th>Attribut</th><th>Pourquoi ici</th><th>Comment on le garantit</th><th>Indicateur cible</th></tr>
+    <tr>
+      <td class="attr"><span class="n">1</span>Sécurité<small>confidentialité, intégrité</small></td>
+      <td>Comptes clients, commandes, messages du chat et du troc&nbsp;; RGPD et UK GDPR</td>
+      <td>Gitleaks, Semgrep, Trivy bloquants <span class="demo">DÉMO</span>&nbsp;; Keycloak + MFA&nbsp;; paiement PCI-DSS délégué</td>
+      <td class="kpi">0 CRITICAL en production</td>
+    </tr>
+    <tr>
+      <td class="attr"><span class="n">2</span>Fiabilité<small>disponibilité, récupération</small></td>
+      <td>Vente 24 h/24 (Londres)&nbsp;; une panne pendant le festival coûte cher</td>
+      <td>Sondes <code>/health</code>, <code>helm --wait</code> et test de fumée <span class="demo">DÉMO</span>&nbsp;; bus de messages, sauvegardes</td>
+      <td class="kpi">Disponibilité ≥&nbsp;99,5&nbsp;%</td>
+    </tr>
+    <tr>
+      <td class="attr"><span class="n">3</span>Performance<small>temps de réponse, capacité</small></td>
+      <td>Pics au festival, aux sorties de goodies et aux enchères (v2)</td>
+      <td>Montée en charge Kubernetes&nbsp;; traitements lents passés par le bus <span class="demo">DÉMO</span>&nbsp;; test de charge</td>
+      <td class="kpi">95 % des réponses &lt;&nbsp;500&nbsp;ms</td>
+    </tr>
+    <tr>
+      <td class="attr"><span class="n">4</span>Maintenabilité<small>modularité, testabilité</small></td>
+      <td>Petite équipe, nombreuses évolutions à venir (enchères, vidéo, films)</td>
+      <td>Services séparés&nbsp;; ruff + pytest bloquants sur chaque PR <span class="demo">DÉMO</span>&nbsp;; revue de code</td>
+      <td class="kpi">100 % des changements par le pipeline</td>
+    </tr>
+    <tr>
+      <td class="attr"><span class="n">5</span>Compatibilité<small>interopérabilité</small></td>
+      <td>Stock, CRM, caisses des 4 magasins, paiement&nbsp;; échanges CSV manuels</td>
+      <td>API versionnées&nbsp;; format d'événement commun RabbitMQ / Kafka <span class="demo">DÉMO</span></td>
+      <td class="kpi">0 échange CSV manuel à&nbsp;6&nbsp;mois</td>
+    </tr>
+    <tr>
+      <td class="attr"><span class="n">6</span>Capacité d'interaction<small>ex-utilisabilité, accessibilité</small></td>
+      <td>Fans sur mobile, en France et à Londres&nbsp;; vente et troc sans aide</td>
+      <td>Angular responsive, FR / EN, RGAA&nbsp;; saisies contrôlées (article invalide → 422) <span class="demo">DÉMO</span></td>
+      <td class="kpi">Lighthouse accessibilité ≥&nbsp;90</td>
+    </tr>
+  </table>
+
+  <p class="foot"><span class="demo">DÉMO</span> visible dans nos démonstrations · <b>Mesuré</b>&nbsp;: pipeline complet jusqu'au déploiement testé en 4&nbsp;min&nbsp;55&nbsp;s, image à 0 CRITICAL · Non prioritaires&nbsp;: adéquation fonctionnelle, flexibilité (acquise par Docker + Helm), sûreté</p>
+</body>
+</html>
