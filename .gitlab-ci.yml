@@ -1,0 +1,71 @@
+# Pipeline GitLab CI de la démo CI/CD.
+# Mêmes étapes, même ordre, mêmes noms de jobs et mêmes versions d'outils que
+# .github/workflows/ci.yml (voir docs/contrats/choix-techniques.md).
+# Étapes 1 à 5 : issue #3.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(develop|main)$/
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^(develop|main)$/
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+stages:
+  - lint
+  - test
+  - secrets
+  - sast
+  - deps
+
+variables:
+  GITLEAKS_IMAGE: "zricethezav/gitleaks:v8.21.2"
+  SEMGREP_IMAGE: "semgrep/semgrep:1.95.0"
+  TRIVY_IMAGE: "aquasec/trivy:0.57.1"
+
+# 1. lint — ruff
+lint:
+  stage: lint
+  image: python:3.12-slim
+  script:
+    - cd demo-cicd
+    - pip install --only-binary=":all:" -r requirements-dev.txt
+    - ruff check .
+
+# 2. test — pytest
+test:
+  stage: test
+  image: python:3.12-slim
+  script:
+    - cd demo-cicd
+    - pip install --only-binary=":all:" -r requirements-dev.txt
+    - pytest -v
+
+# 3. secrets — Gitleaks sur tout l'historique git
+secrets:
+  stage: secrets
+  image:
+    name: $GITLEAKS_IMAGE
+    entrypoint: [""]
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - gitleaks git --redact --verbose .
+
+# 4. sast — Semgrep (règles Python publiques)
+sast:
+  stage: sast
+  image:
+    name: $SEMGREP_IMAGE
+    entrypoint: [""]
+  script:
+    - semgrep scan --config p/python --error --metrics off demo-cicd/
+
+# 5. deps — Trivy sur requirements.txt (échec si vulnérabilité CRITICAL)
+deps:
+  stage: deps
+  image:
+    name: $TRIVY_IMAGE
+    entrypoint: [""]
+  script:
+    - trivy fs --no-progress --scanners vuln --severity HIGH,CRITICAL --exit-code 0 demo-cicd/requirements.txt
+    - trivy fs --no-progress --scanners vuln --severity CRITICAL --exit-code 1 demo-cicd/requirements.txt
