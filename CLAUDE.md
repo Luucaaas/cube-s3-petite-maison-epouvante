@@ -15,9 +15,10 @@ Ne jamais modifier les fichiers d'un autre membre. Si un changement chez un autr
 
 | Chemin | Propriétaire |
 | --- | --- |
-| `demo-cicd/app/`, `demo-cicd/tests/`, `demo-cicd/Dockerfile`, `demo-cicd/requirements*.txt` | Commun (écrit au J1) ; ensuite modifications par PR approuvée par Lucas **et** Maxime |
+| `demo-cicd/app/`, `demo-cicd/tests/`, `demo-cicd/Dockerfile`, `demo-cicd/requirements*.txt` | Commun (issue #1) ; ensuite modifications par PR approuvée par Lucas **et** Maxime |
+| `demo-cicd/helm/` | Version minimale commune (issue #1) ; ensuite Maxime, sans changer le nom de release `troc`, le port ni la route `/health` |
 | `.gitlab-ci.yml`, `.github/workflows/mirror-gitlab.yml` | Lucas |
-| `.github/workflows/ci.yml`, `demo-cicd/helm/`, `demo-cicd/monitoring/` | Maxime |
+| `.github/workflows/ci.yml`, `demo-cicd/monitoring/` | Maxime |
 | `demo-messaging/` | Marie |
 | `docs/contrats/` | Les 3 (PR approuvée par les deux autres) |
 | `docs/schemas/` | Chacun ses schémas (préfixe du nom de fichier = prénom) |
@@ -51,6 +52,19 @@ Format de l'événement (identique pour RabbitMQ et Kafka) :
 - RabbitMQ : exchange `troc` de type topic, clé de routage `article.propose.<categorie>`.
 - Kafka : topic `troc.articles`, clé du message = `categorie`.
 - Le test comparatif envoie la même rafale de messages aux deux et mesure débit et latence. Les chiffres viennent des mesures, jamais inventés.
+
+## Ordre de travail et dépendances
+
+- L'issue **#1** (micro-service + tests + Dockerfile + chart Helm minimal) est la seule dont dépendent les autres. Tant qu'elle n'est pas fusionnée, Lucas et Maxime écrivent leur pipeline contre l'arborescence décrite ici (`demo-cicd/app/main.py`, `demo-cicd/tests/`, `demo-cicd/Dockerfile`, `demo-cicd/helm/`).
+- Chart Helm : release `troc`, service sur le port 8000, sonde sur `/health`. Commande de déploiement commune : `helm upgrade --install troc demo-cicd/helm --set image.repository=<registre>/<image> --set image.tag=<sha> --wait`.
+- Noms de jobs identiques dans les deux pipelines : `lint`, `test`, `secrets`, `sast`, `deps`, `build`, `scan-image`, `deploy`, `smoke`, `dast`.
+- Marie ne dépend de personne.
+
+## Définition de « fini » pour une issue
+
+- PR fusionnée dans `develop`, pipeline(s) vert(s), `ruff check . && pytest` OK.
+- Pour un schéma : fichier `.drawio` dans `docs/schemas/` + export PNG à côté.
+- Une ligne ajoutée dans `journal/journal.md` : date, issue, ce qui a été fait, difficulté éventuelle (sert au bilan de la soutenance).
 
 ## Conventions
 
