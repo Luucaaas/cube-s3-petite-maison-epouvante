@@ -21,7 +21,8 @@ stages:
   - scan-image
   - deploy
   - smoke
-  - dast
+  # Pas "dast" : sur gitlab.com, un stage nommé "dast" active la fonction DAST payante (Ultimate) et le pipeline est refusé
+  - dast-zap
 
 variables:
   GITLEAKS_IMAGE: "zricethezav/gitleaks:v8.21.2"
@@ -173,7 +174,7 @@ smoke:
 # 10. dast — ZAP baseline (optionnel : lancé à la main, n'échoue jamais le pipeline)
 dast:
   extends: .kind
-  stage: dast
+  stage: dast-zap
   rules:
     - if: $CI_COMMIT_BRANCH =~ /^(develop|main)$/
       when: manual
