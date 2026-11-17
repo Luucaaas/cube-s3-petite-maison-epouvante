@@ -132,6 +132,6 @@ jobs:
       - name: Trivy on the image
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
-            image --no-progress --severity HIGH,CRITICAL --exit-code 0 "$IMAGE"
+            image --no-progress --scanners vuln --severity HIGH,CRITICAL --exit-code 0 "$IMAGE"
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
-            image --no-progress --severity CRITICAL --exit-code 1 "$IMAGE"
+            image --no-progress --scanners vuln --severity CRITICAL --exit-code 1 "$IMAGE"

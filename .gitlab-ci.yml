@@ -1,7 +1,7 @@
 # Pipeline GitLab CI de la démo CI/CD.
 # Mêmes étapes, même ordre, mêmes noms de jobs et mêmes versions d'outils que
 # .github/workflows/ci.yml (voir docs/contrats/choix-techniques.md).
-# Étapes 1 à 5 : issue #3.
+# Étapes 1 à 5 : issue #3. Étapes 6 et 7 : issue #4.
 
 workflow:
   rules:
@@ -15,11 +15,16 @@ stages:
   - secrets
   - sast
   - deps
+  - build
+  - scan-image
 
 variables:
   GITLEAKS_IMAGE: "zricethezav/gitleaks:v8.21.2"
   SEMGREP_IMAGE: "semgrep/semgrep:1.95.0"
   TRIVY_IMAGE: "aquasec/trivy:0.57.1"
+  DOCKER_VERSION: "27.5.1"
+  # Image of the micro-service in the GitLab registry, tagged with the commit SHA
+  APP_IMAGE: "$CI_REGISTRY_IMAGE/troc:$CI_COMMIT_SHA"
 
 # 1. lint — ruff
 lint:
@@ -69,3 +74,29 @@ deps:
   script:
     - trivy fs --no-progress --scanners vuln --severity HIGH,CRITICAL --exit-code 0 demo-cicd/requirements.txt
     - trivy fs --no-progress --scanners vuln --severity CRITICAL --exit-code 1 demo-cicd/requirements.txt
+
+# 6. build — image Docker poussée dans le registre GitLab (docker-in-docker)
+build:
+  stage: build
+  image: docker:$DOCKER_VERSION
+  services:
+    - docker:$DOCKER_VERSION-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$APP_IMAGE" demo-cicd
+    - docker push "$APP_IMAGE"
+
+# 7. scan-image — Trivy sur l'image du registre (échec si vulnérabilité CRITICAL)
+scan-image:
+  stage: scan-image
+  image:
+    name: $TRIVY_IMAGE
+    entrypoint: [""]
+  variables:
+    TRIVY_USERNAME: "$CI_REGISTRY_USER"
+    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
+  script:
+    - trivy image --no-progress --scanners vuln --severity HIGH,CRITICAL --exit-code 0 "$APP_IMAGE"
+    - trivy image --no-progress --scanners vuln --severity CRITICAL --exit-code 1 "$APP_IMAGE"
