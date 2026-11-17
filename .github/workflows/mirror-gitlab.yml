@@ -1,4 +1,5 @@
 # Mirror main and develop to GitLab on every push (GitHub is the reference).
+# Demo branches (demo/*, intentional defect) are mirrored too, on their own.
 # Required repository secrets:
 #   GITLAB_TOKEN : GitLab access token with the write_repository scope
 #   GITLAB_REPO  : project URL without scheme, e.g. gitlab.com/group/project.git
@@ -6,7 +7,7 @@ name: mirror-gitlab
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, "demo/**"]
   workflow_dispatch:
 
 concurrency:
@@ -25,7 +26,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Push main and develop to GitLab
+      - name: Push to GitLab
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           GITLAB_REPO: ${{ secrets.GITLAB_REPO }}
@@ -34,6 +35,13 @@ jobs:
             echo "::error::Secrets GITLAB_TOKEN and GITLAB_REPO must be set"
             exit 1
           fi
-          git push "https://oauth2:${GITLAB_TOKEN}@${GITLAB_REPO}" \
-            refs/remotes/origin/main:refs/heads/main \
-            refs/remotes/origin/develop:refs/heads/develop
+          remote="https://oauth2:${GITLAB_TOKEN}@${GITLAB_REPO}"
+          case "$GITHUB_REF_NAME" in
+            demo/*)
+              # Throwaway demo branch: may be recreated, so it is force-pushed
+              git push --force "$remote" "HEAD:refs/heads/$GITHUB_REF_NAME" ;;
+            *)
+              git push "$remote" \
+                refs/remotes/origin/main:refs/heads/main \
+                refs/remotes/origin/develop:refs/heads/develop ;;
+          esac
