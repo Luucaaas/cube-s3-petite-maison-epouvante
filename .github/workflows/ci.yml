@@ -1,6 +1,7 @@
 # Pipeline GitHub Actions de la démo CI/CD.
 # Mêmes étapes, même ordre et mêmes noms de jobs que .gitlab-ci.yml
 # (voir docs/contrats/choix-techniques.md). Étapes 1 à 5 : issue #9. Étapes 6 et 7 : issue #10.
+# Étapes 8 et 9 : issue #11.
 name: ci
 
 on:
@@ -19,6 +20,11 @@ env:
   SEMGREP_IMAGE: "semgrep/semgrep:1.95.0"
   TRIVY_IMAGE: "aquasec/trivy:0.57.1"
   REGISTRY: ghcr.io
+  KIND_VERSION: "v0.27.0"
+  KIND_NODE_IMAGE: "kindest/node:v1.32.2"
+  KUBECTL_VERSION: "v1.32.2"
+  HELM_VERSION: "v3.17.1"
+  CURL_IMAGE: "curlimages/curl:8.11.1"
 
 jobs:
   # 1. lint — ruff
@@ -135,3 +141,58 @@ jobs:
             image --no-progress --scanners vuln --severity HIGH,CRITICAL --exit-code 0 "$IMAGE"
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
             image --no-progress --scanners vuln --severity CRITICAL --exit-code 1 "$IMAGE"
+
+  # 8. deploy — cluster kind créé dans le job, helm upgrade --install
+  # Un cluster kind ne survit pas à son job : deploy et smoke le recréent
+  # chacun avec la même étape (ancre &kind-deploy), comme .kind côté GitLab.
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build, scan-image]
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE: ${{ needs.build.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - &kind-deploy
+        name: Create kind cluster and deploy troc with Helm
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl --proto "=https" --tlsv1.2 -sSfLo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          curl --proto "=https" --tlsv1.2 -sSfLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x /usr/local/bin/kind /usr/local/bin/kubectl
+          curl --proto "=https" --tlsv1.2 -sSfL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar -xz -C /tmp
+          mv /tmp/linux-amd64/helm /usr/local/bin/helm
+          kind create cluster --name troc --image "$KIND_NODE_IMAGE" --wait 120s
+          echo "$GH_TOKEN" | docker login "$REGISTRY" -u "$GITHUB_ACTOR" --password-stdin
+          docker pull "$IMAGE"
+          kind load docker-image "$IMAGE" --name troc
+          helm upgrade --install troc demo-cicd/helm \
+            --set image.repository="${IMAGE%:*}" \
+            --set image.tag="${IMAGE##*:}" \
+            --set service.type=NodePort \
+            --wait --timeout 180s
+          echo "SERVICE_URL=http://troc-control-plane:$(kubectl get svc troc -o jsonpath='{.spec.ports[0].nodePort}')" >> "$GITHUB_ENV"
+      - run: |
+          helm status troc
+          kubectl get pods,svc -l app=troc
+
+  # 9. smoke — appel de /health sur le service déployé
+  smoke:
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE: ${{ needs.build.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - *kind-deploy
+      - name: Call /health
+        run: |
+          docker run --rm --network kind "$CURL_IMAGE" -sSf --retry 5 --retry-all-errors "$SERVICE_URL/health" | tee health.json
+          grep -q '"status":"ok"' health.json
