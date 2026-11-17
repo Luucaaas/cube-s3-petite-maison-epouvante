@@ -12,38 +12,17 @@ Usage (from demo-messaging/):
     python -m rabbitmq.notifications
 """
 
-from event import parse_event
 from rabbitmq.common import EXCHANGE, connect, declare_exchange, routing_key
+from subscribers import SUBSCRIBERS, categories, handle
 
 QUEUE = "notifications"
 FAILED_EXCHANGE = "troc.echec"
 FAILED_QUEUE = "notifications.echec"
 
-# Demo data: subscribers and their interests (in memory, no database).
-SUBSCRIBERS = {
-    "Alice": ["figurines", "affiches"],
-    "Bastien": ["jeux"],
-    "Chloe": ["figurines", "livres"],
-}
-
 
 def binding_keys(subscribers: dict[str, list[str]]) -> list[str]:
     """One routing key per category at least one subscriber follows."""
-    categories = {c for interests in subscribers.values() for c in interests}
-    return sorted(routing_key(c) for c in categories)
-
-
-def recipients(event: dict, subscribers: dict[str, list[str]]) -> list[str]:
-    return [name for name, interests in subscribers.items() if event["categorie"] in interests]
-
-
-def handle(body: bytes, subscribers: dict[str, list[str]] = SUBSCRIBERS) -> list[str]:
-    """Return the notifications to send; raise ValueError or TypeError if the message is invalid."""
-    event = parse_event(body)
-    return [
-        f"Notification à {name} : « {event['titre']} » ({event['categorie']}, {event['type']})"
-        for name in recipients(event, subscribers)
-    ]
+    return [routing_key(c) for c in categories(subscribers)]
 
 
 def setup(channel) -> None:
