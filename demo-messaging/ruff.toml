@@ -1,3 +1,3 @@
 # Local modules of the demo, so import sorting is the same from the repo root or from demo-messaging/.
 [lint.isort]
-known-first-party = ["event", "kafka", "rabbitmq", "subscribers"]
+known-first-party = ["event", "kafka", "producer_cli", "rabbitmq", "subscribers"]
