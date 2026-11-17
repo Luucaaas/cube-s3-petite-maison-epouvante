@@ -15,7 +15,7 @@ permissions:
 env:
   PYTHON_VERSION: "3.12"
   GITLEAKS_VERSION: "8.21.2"
-  SEMGREP_VERSION: "1.95.0"
+  SEMGREP_IMAGE: "semgrep/semgrep:1.95.0"
   TRIVY_IMAGE: "aquasec/trivy:0.57.1"
 
 jobs:
@@ -68,11 +68,10 @@ jobs:
     needs: secrets
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install "semgrep==${SEMGREP_VERSION}"
-      - run: semgrep scan --config p/python --error --metrics off demo-cicd/
+      - name: Semgrep on demo-cicd
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE" \
+            semgrep scan --config p/python --error --metrics off demo-cicd/
 
   # 5. deps — Trivy sur requirements.txt (échec si vulnérabilité CRITICAL)
   deps:
