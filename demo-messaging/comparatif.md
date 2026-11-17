@@ -1,8 +1,8 @@
 # RabbitMQ vs Kafka — forces, faiblesses, limites
 
 Comparaison qualitative, établie sur le scénario troc de la démo (même événement, mêmes abonnés, même code de
-filtrage dans `subscribers.py`). Les mesures de débit et de latence viendront du test comparatif : aucun chiffre
-n'est donné ici tant qu'il n'a pas été mesuré.
+filtrage dans `subscribers.py`). Les mesures de débit et de latence sont dans [resultats.md](resultats.md),
+produites par le test comparatif (`python -m benchmark`).
 
 ## Ce que la démo montre
 
@@ -41,12 +41,17 @@ n'est donné ici tant qu'il n'a pas été mesuré.
 - Aucun volume Docker : tout est perdu à l'arrêt des conteneurs (choix volontaire pour repartir d'un état propre).
 - Pas d'authentification ni de chiffrement entre services et courtiers (identifiants par défaut, réseau local).
 - Les abonnés sont en mémoire : pas de base de données, pas de vrais e-mails.
-- Débit et latence : à mesurer avec le test comparatif, sur la même machine et la même rafale de messages.
+- Débit et latence mesurés sur un poste de travail, un nœud par bus, avec des clients Python différents (pika écrit
+  en Python, confluent-kafka en C) : seuls les ordres de grandeur sont significatifs (voir [resultats.md](resultats.md)).
 
 ## Pour La Petite Maison de l'Épouvante
 
 Le besoin du troc (« prévenir les inscrits intéressés par un nouvel article ») est une tâche à faire une fois par
 message, avec un filtrage par catégorie : c'est le cas d'usage naturel de RabbitMQ. Kafka devient intéressant si la
 plateforme veut garder l'historique des propositions pour le rejouer (nouveau service de recommandation,
-statistiques) ou si le volume d'événements devient très important. Le choix final sera argumenté avec les
-mesures du test comparatif.
+statistiques) ou si le volume d'événements devient très important.
+
+Le test comparatif le confirme : Kafka écoule de l'ordre de 36 fois plus de messages par seconde, mais RabbitMQ
+livre chaque message en quelques millisecondes contre plusieurs dizaines pour Kafka en rafale. Au volume du troc
+(quelques propositions par minute), le débit n'est pas un critère ; la rapidité de notification et le routage par
+catégorie le sont, ce qui fait pencher vers RabbitMQ.
