@@ -29,7 +29,8 @@ Objectif : présenter à la direction la démarche de développement et les choi
 
 ## Règles de travail
 
-- Chacun travaille sur une branche `prenom/sujet` et ouvre une pull request ; relecture sous 24 h, sans bloquer.
+- Choix techniques figés : [`docs/contrats/choix-techniques.md`](docs/contrats/choix-techniques.md). Consignes pour Claude Code : [`CLAUDE.md`](CLAUDE.md).
+- Chacun travaille sur une branche `prenom/sujet` partant de `develop` et ouvre une pull request vers `develop` ; relecture sous 24 h, sans bloquer. `main` = version présentable.
 - Lucas et Maxime ne modifient que leur propre fichier de pipeline : pas de conflit.
 - Avant chaque journée en séance (la veille, 20 h) : tout est poussé et le Kanban est à jour.
 - Une question bloquante : on la note sur la carte Kanban, on prend une hypothèse et on continue.
