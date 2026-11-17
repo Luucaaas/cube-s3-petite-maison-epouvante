@@ -1,12 +1,14 @@
 # Pipeline GitLab CI de la démo CI/CD.
 # Mêmes étapes, même ordre, mêmes noms de jobs et mêmes versions d'outils que
 # .github/workflows/ci.yml (voir docs/contrats/choix-techniques.md).
-# Étapes 1 à 5 : issue #3.
+# Étapes 1 à 5 : issue #3. Étapes 6 et 7 : issue #4. Étapes 8 à 10 : issue #5.
 
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(develop|main)$/
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^(develop|main)$/
+    # Branches de démo (défaut volontaire), reçues par le miroir
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^demo\//
     - if: $CI_PIPELINE_SOURCE == "web"
 
 stages:
@@ -15,11 +17,19 @@ stages:
   - secrets
   - sast
   - deps
+  - build
+  - scan-image
+  - deploy
+  - smoke
+  - dast
 
 variables:
   GITLEAKS_IMAGE: "zricethezav/gitleaks:v8.21.2"
   SEMGREP_IMAGE: "semgrep/semgrep:1.95.0"
   TRIVY_IMAGE: "aquasec/trivy:0.57.1"
+  DOCKER_VERSION: "27.5.1"
+  # Image of the micro-service in the GitLab registry, tagged with the commit SHA
+  APP_IMAGE: "$CI_REGISTRY_IMAGE/troc:$CI_COMMIT_SHA"
 
 # 1. lint — ruff
 lint:
@@ -69,3 +79,104 @@ deps:
   script:
     - trivy fs --no-progress --scanners vuln --severity HIGH,CRITICAL --exit-code 0 demo-cicd/requirements.txt
     - trivy fs --no-progress --scanners vuln --severity CRITICAL --exit-code 1 demo-cicd/requirements.txt
+
+# 6. build — image Docker poussée dans le registre GitLab (docker-in-docker)
+build:
+  stage: build
+  image: docker:$DOCKER_VERSION
+  services:
+    - docker:$DOCKER_VERSION-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$APP_IMAGE" demo-cicd
+    - docker push "$APP_IMAGE"
+
+# 7. scan-image — Trivy sur l'image du registre (échec si vulnérabilité CRITICAL)
+scan-image:
+  stage: scan-image
+  image:
+    name: $TRIVY_IMAGE
+    entrypoint: [""]
+  variables:
+    TRIVY_USERNAME: "$CI_REGISTRY_USER"
+    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
+  script:
+    - trivy image --no-progress --scanners vuln --severity HIGH,CRITICAL --exit-code 0 "$APP_IMAGE"
+    - trivy image --no-progress --scanners vuln --severity CRITICAL --exit-code 1 "$APP_IMAGE"
+
+# Étapes 8 à 10 : chaque job crée son propre cluster kind (dans le service
+# docker-in-docker), y charge l'image du registre et installe le chart Helm.
+# Un cluster ne survit pas à son job : smoke et dast le recréent.
+.kind:
+  image: docker:$DOCKER_VERSION
+  services:
+    - docker:$DOCKER_VERSION-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+    KIND_VERSION: "v0.27.0"
+    KIND_NODE_IMAGE: "kindest/node:v1.32.2"
+    KUBECTL_VERSION: "v1.32.2"
+    HELM_VERSION: "v3.17.1"
+    # API server published on the dind host ("docker"), with a certificate valid for that name
+    KIND_CONFIG: |
+      kind: Cluster
+      apiVersion: kind.x-k8s.io/v1alpha4
+      networking:
+        apiServerAddress: "0.0.0.0"
+        apiServerPort: 6443
+      kubeadmConfigPatches:
+        - |
+          kind: ClusterConfiguration
+          apiServer:
+            certSANs: ["docker"]
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(develop|main)$/
+  before_script:
+    - apk add --no-cache curl
+    - curl -sSfLo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/$KIND_VERSION/kind-linux-amd64"
+    - curl -sSfLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
+    - chmod +x /usr/local/bin/kind /usr/local/bin/kubectl
+    - curl -sSfL "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz" | tar -xz -C /tmp
+    - mv /tmp/linux-amd64/helm /usr/local/bin/helm
+    - echo "$KIND_CONFIG" > kind.yaml
+    - kind create cluster --name troc --image "$KIND_NODE_IMAGE" --config kind.yaml --wait 120s
+    - sed -i 's#https://0.0.0.0:#https://docker:#' ~/.kube/config
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker pull "$APP_IMAGE"
+    - kind load docker-image "$APP_IMAGE" --name troc
+    - >
+      helm upgrade --install troc demo-cicd/helm
+      --set image.repository="$CI_REGISTRY_IMAGE/troc"
+      --set image.tag="$CI_COMMIT_SHA"
+      --set service.type=NodePort
+      --wait --timeout 180s
+    - export SERVICE_URL="http://troc-control-plane:$(kubectl get svc troc -o jsonpath='{.spec.ports[0].nodePort}')"
+
+# 8. deploy — cluster kind créé dans le job, helm upgrade --install
+deploy:
+  extends: .kind
+  stage: deploy
+  script:
+    - helm status troc
+    - kubectl get pods,svc -l app=troc
+
+# 9. smoke — appel de /health sur le service déployé
+smoke:
+  extends: .kind
+  stage: smoke
+  script:
+    - docker run --rm --network kind curlimages/curl:8.11.1 -sSf --retry 5 --retry-all-errors "$SERVICE_URL/health" | tee health.json
+    - grep -q '"status":"ok"' health.json
+
+# 10. dast — ZAP baseline (optionnel : lancé à la main, n'échoue jamais le pipeline)
+dast:
+  extends: .kind
+  stage: dast
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^(develop|main)$/
+      when: manual
+  allow_failure: true
+  script:
+    - docker run --rm --network kind zaproxy/zap-stable:2.16.0 zap-baseline.py -t "$SERVICE_URL/articles" -I
