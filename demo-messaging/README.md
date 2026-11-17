@@ -129,6 +129,78 @@ python -m rabbitmq.producer --invalide figurines
 Le service rejette le message illisible au lieu de bloquer ou de le perdre : il part dans la file
 `notifications.echec` (dead-letter exchange `troc.echec`), visible dans l'interface d'admin pour analyse.
 
+## Scénario Kafka
+
+Même scénario, mêmes abonnés (`subscribers.py`), même format d'événement, mais sur le topic `troc.articles`
+(clé du message = catégorie). Les dépendances sont celles de `requirements-dev.txt` (bibliothèque `confluent-kafka`).
+
+| Fichier | Rôle |
+| --- | --- |
+| `kafka/producer.py` | Publie un article sur `troc.articles`, clé = catégorie |
+| `kafka/notifications.py` | Service de notifications, groupe de consommateurs `notifications` ; `--rejouer` relit tout l'historique |
+
+Différence visible : Kafka ne route pas. Le service reçoit **toutes** les catégories et filtre lui-même (« personne
+n'est intéressé, ignoré » pour un article `deco`). Chaque ligne affiche la partition et la position du message
+(`p0 #2`) : l'ordre n'est garanti qu'à l'intérieur d'une partition, donc d'une catégorie.
+
+### 1. Filtrage par centre d'intérêt
+
+Terminal 1 :
+
+```bash
+python -m kafka.notifications
+```
+
+Terminal 2 :
+
+```bash
+python -m kafka.producer "Figurine Orc" figurines echange
+```
+
+```bash
+python -m kafka.producer "Vase ancien" deco don
+```
+
+### 2. Le consommateur tombe : il reprend là où il s'était arrêté
+
+1. Ctrl+C dans le terminal 1.
+2. Publier deux articles et un message invalide depuis le terminal 2 :
+
+```bash
+python -m kafka.producer "Affiche Alien" affiches don
+```
+
+```bash
+python -m kafka.producer "Dracula" livres echange
+```
+
+```bash
+python -m kafka.producer --invalide figurines
+```
+
+3. Montrer les 3 messages non lus (colonne `LAG`) :
+
+```bash
+docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group notifications
+```
+
+4. Relancer le service : il lit les 3 messages, notifie Alice et Chloe, et copie le message invalide dans le topic
+   `troc.articles.echec` (Kafka n'a pas de file d'échec intégrée : c'est le service qui s'en charge).
+
+Si le service a planté au lieu d'être arrêté par Ctrl+C, Kafka attend la fin de sa session (10 s dans la démo,
+45 s par défaut) avant de redonner ses partitions : le service relancé reste muet pendant ce délai.
+
+### 3. Rejeu de l'historique
+
+```bash
+python -m kafka.notifications --rejouer
+```
+
+Un nouveau groupe de consommateurs relit **tous** les messages depuis le début, déjà lus ou non, sans changer la
+position du service normal. Avec RabbitMQ, c'est impossible : un message acquitté est supprimé de la file.
+
+Le tableau des forces et faiblesses des deux bus est dans [comparatif.md](comparatif.md).
+
 ## Arrêter
 
 ```bash

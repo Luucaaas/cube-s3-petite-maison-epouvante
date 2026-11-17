@@ -4,7 +4,8 @@ import pytest
 
 from event import FIELDS, make_event, parse_event
 from rabbitmq.common import routing_key
-from rabbitmq.notifications import binding_keys, handle, recipients
+from rabbitmq.notifications import binding_keys
+from subscribers import handle, recipients
 
 SUBSCRIBERS = {"Alice": ["figurines", "affiches"], "Bastien": ["jeux"], "Chloe": ["figurines"]}
 
