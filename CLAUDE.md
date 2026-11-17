@@ -60,6 +60,19 @@ Format de l'événement (identique pour RabbitMQ et Kafka) :
 - Noms de jobs identiques dans les deux pipelines : `lint`, `test`, `secrets`, `sast`, `deps`, `build`, `scan-image`, `deploy`, `smoke`, `dast`.
 - Marie ne dépend de personne.
 
+## Vérifier qu'une issue dont on dépend est terminée
+
+Une issue fermée = travail fusionné dans `develop` (la PR contient `Closes #<n>` et `develop` est la branche par défaut, donc la fermeture est automatique). Les dépendances sont déclarées dans GitHub (« Blocked by »).
+
+Avant de commencer une issue :
+
+1. `gh issue view <n>` : lire la section des issues qui la bloquent.
+2. Pour chacune, `gh issue view <m> --json state --jq .state` → `CLOSED` = terminée.
+3. Terminée : `git pull origin develop` pour récupérer son travail, puis rebaser sa branche si besoin (`git rebase develop`).
+4. Encore ouverte : **ne pas attendre**. Travailler contre l'interface décrite dans ce fichier (arborescence, routes, chart, noms de jobs), puis écrire dans la PR « Dépend de #<m>, non fusionnée au moment de cette PR ».
+
+Vue d'ensemble pour les humains : `gh issue list --state open --label J2` ou le tableau GitHub Projects.
+
 ## Définition de « fini » pour une issue
 
 - PR fusionnée dans `develop`, pipeline(s) vert(s), `ruff check . && pytest` OK.
