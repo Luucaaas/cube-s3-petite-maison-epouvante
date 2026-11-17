@@ -1,0 +1,39 @@
+# Mirror main and develop to GitLab on every push (GitHub is the reference).
+# Required repository secrets:
+#   GITLAB_TOKEN : GitLab access token with the write_repository scope
+#   GITLAB_REPO  : project URL without scheme, e.g. gitlab.com/group/project.git
+name: mirror-gitlab
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-gitlab
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Push main and develop to GitLab
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_REPO: ${{ secrets.GITLAB_REPO }}
+        run: |
+          if [ -z "$GITLAB_TOKEN" ] || [ -z "$GITLAB_REPO" ]; then
+            echo "::error::Secrets GITLAB_TOKEN and GITLAB_REPO must be set"
+            exit 1
+          fi
+          git push "https://oauth2:${GITLAB_TOKEN}@${GITLAB_REPO}" \
+            refs/remotes/origin/main:refs/heads/main \
+            refs/remotes/origin/develop:refs/heads/develop
