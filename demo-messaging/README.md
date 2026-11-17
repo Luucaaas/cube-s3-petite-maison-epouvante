@@ -64,6 +64,71 @@ Format de l'événement (identique pour les deux bus) :
 - RabbitMQ : exchange `troc` de type `topic`, clé de routage `article.propose.<categorie>`.
 - Kafka : topic `troc.articles`, clé du message = `categorie`.
 
+## Scénario RabbitMQ
+
+Installer les dépendances Python (Python 3.12), une fois, depuis `demo-messaging/` :
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+| Fichier | Rôle |
+| --- | --- |
+| `event.py` | Construit et vérifie l'événement `article.propose` (partagé avec Kafka) |
+| `rabbitmq/producer.py` | Publie un article sur l'exchange `troc`, clé `article.propose.<categorie>`, message persistant |
+| `rabbitmq/notifications.py` | Service de notifications : file durable `notifications`, abonnés et centres d'intérêt en mémoire |
+
+Abonnés de démo : Alice (figurines, affiches), Bastien (jeux), Chloe (figurines, livres). La file `notifications` n'est
+liée qu'aux catégories suivies : un article `deco` n'arrive jamais au service, c'est RabbitMQ qui filtre.
+
+### 1. Filtrage par centre d'intérêt
+
+Terminal 1 (le service, à laisser ouvert) :
+
+```bash
+python -m rabbitmq.notifications
+```
+
+Terminal 2 :
+
+```bash
+python -m rabbitmq.producer "Figurine Orc" figurines echange
+```
+
+```bash
+python -m rabbitmq.producer "Vase ancien" deco don
+```
+
+Résultat attendu : Alice et Chloe sont notifiées pour la figurine, personne pour le vase.
+
+### 2. Le consommateur tombe : les messages attendent
+
+1. Arrêter le service (Ctrl+C dans le terminal 1).
+2. Publier deux articles depuis le terminal 2 :
+
+```bash
+python -m rabbitmq.producer "Affiche Alien" affiches don
+```
+
+```bash
+python -m rabbitmq.producer "Dracula" livres echange
+```
+
+3. Montrer l'interface d'admin (<http://localhost:15672>, onglet *Queues*) : la file `notifications` contient
+   2 messages *Ready*, aucun n'est perdu.
+4. Relancer le service : il rattrape les 2 messages dans l'ordre.
+
+Le service n'acquitte un message qu'après l'avoir traité : s'il plante en plein traitement, RabbitMQ le redistribue.
+
+### 3. Message en échec : la file `notifications.echec`
+
+```bash
+python -m rabbitmq.producer --invalide figurines
+```
+
+Le service rejette le message illisible au lieu de bloquer ou de le perdre : il part dans la file
+`notifications.echec` (dead-letter exchange `troc.echec`), visible dans l'interface d'admin pour analyse.
+
 ## Arrêter
 
 ```bash
